@@ -1,3 +1,5 @@
+import { Timestamp } from 'firebase/firestore';
+
 export interface MindMapNode {
   id: string;
   type: 'root' | 'topic' | 'subtopic' | 'point' | 'subpoint';
@@ -47,8 +49,8 @@ export interface MindMapData {
   title: string;
   nodes: MindMapNode[];
   edges: MindMapEdge[];
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp | Date;
+  updatedAt: Timestamp | Date;
   userId: string;
   prompt: string;
 }

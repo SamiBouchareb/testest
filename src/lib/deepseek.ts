@@ -62,7 +62,8 @@ export async function generateMindMapContent(prompt: string): Promise<DeepseekRe
   6. Ensure logical flow and connections between levels
   7. Use clear, action-oriented language
   8. Return ONLY the JSON object, no other text
-  9. Ensure the JSON is properly formatted`;
+  9. Ensure the JSON is properly formatted
+  10. the output language is the input language`;
 
   try {
     console.log('Sending request to Deepseek API...');

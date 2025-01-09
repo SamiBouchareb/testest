@@ -44,6 +44,8 @@ const connectionLineStyle = {
 
 export const MindMapWorkspace: FC = () => {
   const [prompt, setPrompt] = useState('')
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [mapTitle, setMapTitle] = useState('')
   const { user, loading: authLoading } = useAuth()
   const { 
     generateMindMap, 
@@ -51,14 +53,11 @@ export const MindMapWorkspace: FC = () => {
     isLoading,
     error,
     clearError,
-    createProject 
+    saveMindMap
   } = useMindMap()
   
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
-  const [showProjectModal, setShowProjectModal] = useState(false)
-  const [projectTitle, setProjectTitle] = useState('')
-  const [projectDescription, setProjectDescription] = useState('')
 
   useEffect(() => {
     if (currentMindMap) {
@@ -67,35 +66,22 @@ export const MindMapWorkspace: FC = () => {
     }
   }, [currentMindMap, setNodes, setEdges])
 
-  useEffect(() => {
-    // Show project modal only when mind map is generated successfully
-    if (currentMindMap && !error && !isLoading) {
-      setShowProjectModal(true)
-    }
-  }, [currentMindMap, error, isLoading])
-
   const handleGenerateMindMap = async () => {
     if (!prompt.trim()) return
     clearError()
     await generateMindMap(prompt)
   }
 
-  const handleCreateProject = async () => {
-    if (!projectTitle.trim()) return
+  const handleSave = async () => {
+    if (!mapTitle.trim()) return
     try {
-      await createProject(projectTitle, projectDescription)
-      setShowProjectModal(false)
-      setProjectTitle('')
-      setProjectDescription('')
+      const result = await saveMindMap(mapTitle)
+      setShowSaveModal(false)
+      setMapTitle('')
+      // You can use the result (map ID) here if needed
     } catch (err) {
-      console.error('Failed to create project:', err)
+      console.error('Failed to save mind map:', err)
     }
-  }
-
-  const handleCloseModal = () => {
-    setShowProjectModal(false)
-    setProjectTitle('')
-    setProjectDescription('')
   }
 
   if (authLoading) {
@@ -107,39 +93,78 @@ export const MindMapWorkspace: FC = () => {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-50">
-      <div className="p-4 border-b border-gray-200 bg-white shadow-sm">
-        <div className="max-w-3xl mx-auto">
-          <textarea
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-            placeholder="Enter your prompt here..."
-            rows={3}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-          />
-          <div className="mt-2 flex items-center gap-4">
-            <button
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              onClick={handleGenerateMindMap}
-              disabled={isLoading || !prompt.trim()}
-            >
-              {isLoading ? 'Generating...' : 'Generate Mind Map'}
-            </button>
-            {error && (
-              <p className="text-red-500 text-sm flex items-center gap-2">
-                {error}
+    <div className="flex-1 flex flex-col relative bg-gray-50">
+      {/* Floating Prompt Section */}
+      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 w-[500px]">
+        <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-blue-100 p-3 
+                      animate-float transition-all duration-300 hover:shadow-blue-200/50
+                      hover:border-blue-200 group">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleGenerateMindMap();
+                }
+              }}
+              placeholder="Enter your topic or idea..."
+              className="flex-1 bg-transparent border-none outline-none placeholder-gray-400
+                        text-gray-700 text-sm focus:ring-0"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleGenerateMindMap}
+                disabled={isLoading || !prompt.trim()}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300
+                          ${isLoading 
+                            ? 'bg-blue-100 text-blue-400 cursor-not-allowed'
+                            : 'bg-blue-500 text-white hover:bg-blue-600 hover:shadow-md hover:shadow-blue-200'
+                          }
+                          disabled:opacity-50 disabled:cursor-not-allowed
+                          group-hover:translate-y-[-1px]`}
+              >
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
+                    <span>Generating...</span>
+                  </div>
+                ) : (
+                  'Generate'
+                )}
+              </button>
+              {currentMindMap && (
                 <button
-                  onClick={clearError}
-                  className="text-red-700 hover:text-red-900"
+                  onClick={() => setShowSaveModal(true)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-green-500 text-white
+                            hover:bg-green-600 transition-all duration-300 hover:shadow-md 
+                            hover:shadow-green-200 group-hover:translate-y-[-1px]"
                 >
-                  ✕
+                  Save
                 </button>
-              </p>
-            )}
+              )}
+            </div>
           </div>
         </div>
+        
+        {/* Error Message */}
+        {error && (
+          <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 
+                        animate-slideDown">
+            {error}
+            <button
+              onClick={clearError}
+              className="ml-2 text-red-500 hover:text-red-700"
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </div>
-      
+
+      {/* Mind Map Area */}
       <div className="flex-1 relative">
         {currentMindMap ? (
           <ReactFlow
@@ -181,12 +206,6 @@ export const MindMapWorkspace: FC = () => {
                 }
               }}
             />
-            <Panel position="top-right" className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-              <div className="text-sm text-gray-600">
-                <p className="font-medium text-gray-800">{currentMindMap.title}</p>
-                <p className="text-xs mt-1">Created: {currentMindMap.createdAt.toLocaleString()}</p>
-              </div>
-            </Panel>
           </ReactFlow>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
@@ -205,43 +224,39 @@ export const MindMapWorkspace: FC = () => {
         )}
       </div>
 
-      {/* Project Creation Modal */}
-      {showProjectModal && (
+      {/* Save Modal */}
+      {showSaveModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Create Project</h2>
+            <h2 className="text-lg font-semibold mb-4 text-gray-800">Save Mind Map</h2>
             <input
               type="text"
-              placeholder="Project Title"
-              className="w-full p-2 border border-gray-300 rounded mb-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={projectTitle}
-              onChange={(e) => setProjectTitle(e.target.value)}
-            />
-            <textarea
-              placeholder="Project Description"
-              className="w-full p-2 border border-gray-300 rounded mb-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              rows={3}
-              value={projectDescription}
-              onChange={(e) => setProjectDescription(e.target.value)}
+              placeholder="Enter a title for your mind map"
+              className="w-full p-2 border border-gray-300 rounded mb-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              value={mapTitle}
+              onChange={(e) => setMapTitle(e.target.value)}
             />
             <div className="flex justify-end gap-2">
               <button
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-                onClick={handleCloseModal}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium"
+                onClick={() => {
+                  setShowSaveModal(false)
+                  setMapTitle('')
+                }}
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                onClick={handleCreateProject}
-                disabled={!projectTitle.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                onClick={handleSave}
+                disabled={!mapTitle.trim()}
               >
-                Create Project
+                Save
               </button>
             </div>
           </div>
         </div>
       )}
     </div>
-  );
-};
+  )
+}

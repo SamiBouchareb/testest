@@ -1,20 +1,26 @@
 'use client'
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { MindMapData, MindMapNode, MindMapEdge, MindMapProject } from '@/types/mindmap';
+import { MindMapData, MindMapNode, MindMapEdge } from '@/types/mindmap';
 import { generateMindMapContent } from '@/lib/deepseek';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  doc, 
+  getDoc, 
+  Timestamp 
+} from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 
 interface MindMapContextType {
   currentMindMap: MindMapData | null;
-  currentProject: MindMapProject | null;
   isLoading: boolean;
   error: string | null;
   generateMindMap: (prompt: string) => Promise<void>;
-  createProject: (title: string, description: string) => Promise<void>;
-  saveMindMap: () => Promise<void>;
+  saveMindMap: (title: string) => Promise<string | void>;
+  loadSavedMap: (map: MindMapData | null) => void;
   clearError: () => void;
 }
 
@@ -22,7 +28,6 @@ const MindMapContext = createContext<MindMapContextType | null>(null);
 
 export function MindMapProvider({ children }: { children: ReactNode }) {
   const [currentMindMap, setCurrentMindMap] = useState<MindMapData | null>(null);
-  const [currentProject, setCurrentProject] = useState<MindMapProject | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
@@ -30,7 +35,6 @@ export function MindMapProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) {
       setCurrentMindMap(null);
-      setCurrentProject(null);
       setError(null);
     }
   }, [user]);
@@ -326,71 +330,54 @@ export function MindMapProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const createProject = async (title: string, description: string) => {
-    if (!user || !currentMindMap) {
-      setError('Cannot create project: user not logged in or no mind map generated');
-      return;
-    }
-
-    try {
-      // Save mind map first
-      const mindMapRef = await addDoc(collection(db, 'mindmaps'), {
-        ...currentMindMap,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      // Create project with reference to mind map
-      const project: MindMapProject = {
-        id: '',
-        title,
-        description,
-        mindMapId: mindMapRef.id,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        userId: user.uid,
-      };
-
-      const projectRef = await addDoc(collection(db, 'projects'), project);
-      await updateDoc(doc(db, 'projects', projectRef.id), { id: projectRef.id });
-
-      setCurrentProject({
-        ...project,
-        id: projectRef.id,
-      });
-    } catch (error) {
-      console.error('Error creating project:', error);
-      setError('Failed to create project');
-    }
-  };
-
-  const saveMindMap = async () => {
+  const saveMindMap = async (title: string) => {
     if (!user || !currentMindMap) {
       setError('Cannot save: user not logged in or no mind map to save');
       return;
     }
 
     try {
-      await addDoc(collection(db, 'mindmaps'), {
+      setIsLoading(true);
+      const now = Timestamp.now();
+      const mindMapData: MindMapData = {
         ...currentMindMap,
-        updatedAt: new Date(),
+        title,
+        userId: user.uid,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const docRef = await addDoc(collection(db, 'mindmaps'), mindMapData);
+      await updateDoc(doc(db, 'mindmaps', docRef.id), { 
+        id: docRef.id,
+      });
+      
+      setCurrentMindMap({ 
+        ...mindMapData, 
+        id: docRef.id,
       });
     } catch (error) {
       console.error('Error saving mind map:', error);
       setError('Failed to save mind map');
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const loadSavedMap = (map: MindMapData | null) => {
+    setCurrentMindMap(map);
+    clearError();
   };
 
   return (
     <MindMapContext.Provider
       value={{
         currentMindMap,
-        currentProject,
         isLoading,
         error,
         generateMindMap,
-        createProject,
         saveMindMap,
+        loadSavedMap,
         clearError,
       }}
     >
