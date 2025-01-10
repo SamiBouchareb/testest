@@ -13,12 +13,13 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
+import { extractTextFromPDF, mergePDFContentWithPrompt } from '@/lib/pdfUtils';
 
 interface MindMapContextType {
   currentMindMap: MindMapData | null;
   isLoading: boolean;
   error: string | null;
-  generateMindMap: (prompt: string) => Promise<void>;
+  generateMindMap: (prompt: string, pdfFile?: File) => Promise<void>;
   saveMindMap: (title: string) => Promise<string | void>;
   loadSavedMap: (map: MindMapData | null) => void;
   clearError: () => void;
@@ -152,9 +153,14 @@ export function MindMapProvider({ children }: { children: ReactNode }) {
     };
   };
 
-  const generateMindMap = async (prompt: string) => {
+  const generateMindMap = async (prompt: string, pdfFile?: File) => {
     if (!user) {
       setError('Please sign in to generate mind maps');
+      return;
+    }
+
+    if (!prompt.trim() && !pdfFile) {
+      setError('Please provide a prompt or upload a PDF');
       return;
     }
 
@@ -168,7 +174,20 @@ export function MindMapProvider({ children }: { children: ReactNode }) {
     setCurrentMindMap(null);
 
     try {
-      const content = await generateMindMapContent(prompt);
+      let finalPrompt = prompt;
+      
+      if (pdfFile) {
+        try {
+          const pdfContent = await extractTextFromPDF(pdfFile);
+          finalPrompt = mergePDFContentWithPrompt(pdfContent, prompt);
+        } catch (error) {
+          setError('Failed to process PDF file. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      const content = await generateMindMapContent(finalPrompt);
       
       if (!content.topics || content.topics.length === 0) {
         throw new Error('No topics generated for the mind map');
@@ -184,7 +203,8 @@ export function MindMapProvider({ children }: { children: ReactNode }) {
         id: rootId,
         type: 'root',
         data: { 
-          label: prompt,
+          label: 'Mind Map',
+          description: pdfFile ? 'Generated from document and prompt' : 'Generated from prompt',
           level: 0
         },
         position: rootPosition,

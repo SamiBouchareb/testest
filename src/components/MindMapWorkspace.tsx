@@ -44,6 +44,7 @@ const connectionLineStyle = {
 
 export const MindMapWorkspace: FC = () => {
   const [prompt, setPrompt] = useState('')
+  const [pdfContent, setPdfContent] = useState<string | null>(null)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [mapTitle, setMapTitle] = useState('')
   const { user, loading: authLoading } = useAuth()
@@ -66,11 +67,46 @@ export const MindMapWorkspace: FC = () => {
     }
   }, [currentMindMap, setNodes, setEdges])
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // Check if file is PDF
+    if (file.type !== 'application/pdf') {
+      clearError();
+      setPdfContent(null);
+      return;
+    }
+    
+    // Store the file name for display
+    setPdfContent(file.name);
+  };
+
   const handleGenerateMindMap = async () => {
-    if (!prompt.trim()) return
-    clearError()
-    await generateMindMap(prompt)
-  }
+    if (!prompt.trim() && !pdfContent) return;
+    clearError();
+    
+    try {
+      const fileInput = document.getElementById('pdfUpload') as HTMLInputElement;
+      const pdfFile = fileInput?.files?.[0];
+      
+      // If we have both a PDF and a prompt, or just a PDF with no prompt
+      if (pdfFile) {
+        if (!prompt.trim()) {
+          // If no prompt provided with PDF, use a default one
+          await generateMindMap('Create a comprehensive mind map of the main concepts and their relationships from this PDF', pdfFile);
+        } else {
+          await generateMindMap(prompt, pdfFile);
+        }
+      } else {
+        // If no PDF, just use the prompt
+        await generateMindMap(prompt);
+      }
+    } catch (error) {
+      console.error('Error generating mind map:', error);
+    }
+  };
 
   const handleSave = async () => {
     if (!mapTitle.trim()) return
@@ -100,53 +136,72 @@ export const MindMapWorkspace: FC = () => {
                       animate-float transition-all duration-300 hover:shadow-blue-200/50
                       hover:border-blue-200 group">
           <div className="flex gap-2">
-            <input
-              type="text"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleGenerateMindMap();
-                }
-              }}
-              placeholder="Enter your topic or idea..."
-              className="flex-1 bg-transparent border-none outline-none placeholder-gray-400
-                        text-gray-700 text-sm focus:ring-0"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={handleGenerateMindMap}
-                disabled={isLoading || !prompt.trim()}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300
-                          ${isLoading 
-                            ? 'bg-blue-100 text-blue-400 cursor-not-allowed'
-                            : 'bg-blue-500 text-white hover:bg-blue-600 hover:shadow-md hover:shadow-blue-200'
-                          }
-                          disabled:opacity-50 disabled:cursor-not-allowed
-                          group-hover:translate-y-[-1px]`}
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Enter your prompt..."
+                className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-blue-300 
+                         focus:ring focus:ring-blue-200 focus:ring-opacity-50 transition-all duration-300"
+              />
+              <label 
+                htmlFor="pdfUpload"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 hover:bg-gray-100 
+                         rounded-lg cursor-pointer transition-colors"
+                title="Upload PDF Document"
               >
-                {isLoading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
-                    <span>Generating...</span>
-                  </div>
-                ) : (
-                  'Generate'
-                )}
-              </button>
-              {currentMindMap && (
-                <button
-                  onClick={() => setShowSaveModal(true)}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-green-500 text-white
-                            hover:bg-green-600 transition-all duration-300 hover:shadow-md 
-                            hover:shadow-green-200 group-hover:translate-y-[-1px]"
-                >
-                  Save
-                </button>
-              )}
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-gray-500">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+              </label>
+              <input
+                id="pdfUpload"
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
             </div>
+            <button
+              onClick={handleGenerateMindMap}
+              disabled={isLoading || (!prompt.trim() && !pdfContent)}
+              className={`px-4 py-2 rounded-lg font-medium transition-all duration-300
+                ${isLoading 
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                  : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'}`}
+            >
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Generating...</span>
+                </div>
+              ) : (
+                'Generate'
+              )}
+            </button>
           </div>
+          {pdfContent && (
+            <div className="mt-2 px-4 py-2 bg-blue-50 rounded-lg text-sm text-blue-600 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M3 3.5A1.5 1.5 0 014.5 2h6.879a1.5 1.5 0 011.06.44l4.122 4.12A1.5 1.5 0 0117 7.622V16.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 013 16.5v-13z" />
+              </svg>
+              <span>Document uploaded: {pdfContent}</span>
+              <button 
+                onClick={() => {
+                  setPdfContent(null);
+                  const fileInput = document.getElementById('pdfUpload') as HTMLInputElement;
+                  if (fileInput) fileInput.value = '';
+                }}
+                className="ml-auto hover:text-blue-700"
+                title="Remove document"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
         
         {/* Error Message */}
@@ -206,6 +261,25 @@ export const MindMapWorkspace: FC = () => {
                 }
               }}
             />
+            
+            {/* Save Button */}
+            {user && currentMindMap && (
+              <Panel position="top-right" className="mr-12 mt-4">
+                <button
+                  onClick={() => setShowSaveModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-blue-600 rounded-lg 
+                           shadow-lg border border-blue-100 hover:bg-blue-50 transition-colors
+                           font-medium text-sm"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" 
+                       strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" 
+                          d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                  </svg>
+                  Save Mind Map
+                </button>
+              </Panel>
+            )}
           </ReactFlow>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
